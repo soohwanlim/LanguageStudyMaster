@@ -18,7 +18,13 @@ const homeTranslations = {
         recording: '녹음 중...',
         recentRecordings: '녹음 목록',
         downloadAll: '전체 다운로드 (.zip)',
+        deleteAll: '전체 삭제',
+        confirmDeleteTitle: '전체 삭제 확인',
+        confirmDeleteMsg: '정말 모든 녹음 파일을 삭제하시겠습니까?',
+        yes: '예',
+        no: '아니오',
         noRecordings: '녹음된 파일이 없습니다',
+        warning: '주의: 다운로드하지 않고 새로고침하면 녹음 파일이 사라질 수 있습니다. 중요한 건 꼭 다운로드하세요!',
     },
     en: {
         studyMaterial: 'Study Material',
@@ -32,7 +38,13 @@ const homeTranslations = {
         recording: 'Recording in progress...',
         recentRecordings: 'Recent Recordings',
         downloadAll: 'Download All (.zip)',
+        deleteAll: 'Delete All',
+        confirmDeleteTitle: 'Confirm Delete',
+        confirmDeleteMsg: 'Delete all recordings?',
+        yes: 'Yes',
+        no: 'No',
         noRecordings: 'No recordings yet',
+        warning: 'Warning: Recordings may be lost if you refresh without downloading. Please download important files!',
     },
     ja: {
         studyMaterial: '学習教材',
@@ -46,7 +58,13 @@ const homeTranslations = {
         recording: '録音中...',
         recentRecordings: '録音リスト',
         downloadAll: '一括ダウンロード (.zip)',
+        deleteAll: 'すべて削除',
+        confirmDeleteTitle: '削除の確認',
+        confirmDeleteMsg: 'すべての録音を削除しますか？',
+        yes: 'はい',
+        no: 'いいえ',
         noRecordings: '録音ファイルがありません',
+        warning: '注意: ダウンロードせずに更新すると録音ファイルが消える可能性があります。重要なファイルは必ずダウンロードしてください！',
     },
     zh: {
         studyMaterial: '学习资料',
@@ -60,7 +78,13 @@ const homeTranslations = {
         recording: '录音中...',
         recentRecordings: '录音列表',
         downloadAll: '全部下载 (.zip)',
+        deleteAll: '全部删除',
+        confirmDeleteTitle: '确认删除',
+        confirmDeleteMsg: '删除所有录音？',
+        yes: '是',
+        no: '否',
         noRecordings: '暂无录音文件',
+        warning: '注意: 如果不下载直接刷新，录音文件可能会丢失。请务必下载重要文件！',
     },
     es: {
         studyMaterial: 'Material de estudio',
@@ -74,7 +98,13 @@ const homeTranslations = {
         recording: 'Grabación en curso...',
         recentRecordings: 'Grabaciones recientes',
         downloadAll: 'Descargar todo (.zip)',
+        deleteAll: 'Eliminar todo',
+        confirmDeleteTitle: 'Confirmar eliminación',
+        confirmDeleteMsg: '¿Eliminar todas las grabaciones?',
+        yes: 'Sí',
+        no: 'No',
         noRecordings: 'No hay grabaciones todavía',
+        warning: 'Advertencia: Las grabaciones pueden perderse si actualiza sin descargar. ¡Asegúrese de descargar los archivos importantes!',
     }
 };
 
@@ -163,11 +193,13 @@ const Home = ({ lang = 'ko' }) => {
     const [videoError, setVideoError] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const playerRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerRef = useRef(null);
+    const startTimeRef = useRef(null);
 
     const t = homeTranslations[lang] || homeTranslations['en'];
 
@@ -210,9 +242,14 @@ const Home = ({ lang = 'ko' }) => {
             mediaRecorderRef.current.start();
             setIsRecording(true);
 
+            // Safer timer implementation using Date.now()
+            startTimeRef.current = Date.now();
+            setRecordingTime(0);
+
+            if (timerRef.current) clearInterval(timerRef.current);
             timerRef.current = setInterval(() => {
-                setRecordingTime(prev => prev + 1);
-            }, 1000);
+                setRecordingTime(Math.floor((Date.now() - startTimeRef.current) / 1000));
+            }, 500); // Check every 500ms, calculated from start time so no drift
 
         } catch (error) {
             console.error("Error accessing microphone:", error);
@@ -330,9 +367,21 @@ const Home = ({ lang = 'ko' }) => {
         }
     };
 
+    const handleDeleteAll = () => {
+        setRecordings([]);
+        setShowDeleteConfirm(false);
+    };
+
     useEffect(() => {
         setVideoError(false);
     }, [url]);
+
+    // Cleanup timer on unmount
+    useEffect(() => {
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, []);
 
     return (
         <main className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-[1800px] mx-auto w-full flex-1">
@@ -429,17 +478,52 @@ const Home = ({ lang = 'ko' }) => {
 
                 {/* Recordings List */}
                 <div className="glass-panel flex-1">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-medium text-gray-300">{t.recentRecordings}</h3>
-                        {recordings.length > 0 && (
-                            <button
-                                onClick={handleDownloadAll}
-                                className="flex items-center gap-2 text-xs bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/30"
-                            >
-                                <Archive size={14} />
-                                {t.downloadAll}
-                            </button>
-                        )}
+                    <div className="flex flex-col gap-2 mb-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-medium text-gray-300">{t.recentRecordings}</h3>
+                            {recordings.length > 0 && (
+                                <div className="flex gap-2">
+                                    {showDeleteConfirm ? (
+                                        <div className="flex items-center gap-2 bg-red-900/30 px-2 py-1 rounded-lg border border-red-500/30 animate-in fade-in slide-in-from-right-2 duration-200">
+                                            <span className="text-xs text-red-200 mr-1 hidden sm:inline">{t.confirmDeleteMsg}</span>
+                                            <button
+                                                onClick={handleDeleteAll}
+                                                className="text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded transition-colors font-medium shadow-lg"
+                                            >
+                                                {t.yes}
+                                            </button>
+                                            <button
+                                                onClick={() => setShowDeleteConfirm(false)}
+                                                className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded transition-colors"
+                                            >
+                                                {t.no}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={handleDownloadAll}
+                                                className="flex items-center gap-2 text-xs bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/30"
+                                            >
+                                                <Archive size={14} />
+                                                {t.downloadAll}
+                                            </button>
+                                            <button
+                                                onClick={() => setShowDeleteConfirm(true)}
+                                                className="flex items-center gap-2 text-xs bg-red-500/10 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-lg transition-colors border border-red-500/30"
+                                                title={t.deleteAll}
+                                            >
+                                                <Trash2 size={14} />
+                                                {t.deleteAll}
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-xs text-red-400 bg-red-900/10 p-2 rounded border border-red-500/20">
+                            {t.warning}
+                        </p>
                     </div>
                     <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-2">
                         <AnimatePresence>
