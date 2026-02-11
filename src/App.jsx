@@ -124,7 +124,7 @@ const Header = ({ lang, setLang }) => {
         </div>
 
         <a
-          href="https://github.com/swtee0506"
+          href="https://github.com/soohwanlim/LanguageStudyMaster"
           target="_blank"
           rel="noopener noreferrer"
           className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors text-gray-300 hover:text-white"
